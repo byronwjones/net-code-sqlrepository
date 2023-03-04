@@ -19,14 +19,14 @@ namespace BWJ.Core.SqlRepository
             }
 
             EntityType = typeof(TEntity);
-            TableAlias = alias;
+            TableAlias = alias ?? string.Empty;
 
             var tableName = EntityType.GetCustomAttribute<TableAttribute>()?.Name ?? $"{EntityType.Name}s";
             TableName = NormalizeTableName(tableName);
             _Table = "[{" + schemaIndex + "}].[" + TableName + "]";
         }
 
-        public QueryHelper(string tableName, string alias, int schemaIndex = 0)
+        public QueryHelper(string tableName, string? alias, int schemaIndex = 0)
         {
             if (schemaIndex < 0 || schemaIndex > 1)
             {
@@ -34,20 +34,20 @@ namespace BWJ.Core.SqlRepository
             }
 
             EntityType = typeof(TEntity);
-            TableAlias = alias;
+            TableAlias = alias ?? string.Empty;
 
             TableName = NormalizeTableName(tableName);
-            _Table = "[{0}].[" + TableName + "]";
+            _Table = "[{" + schemaIndex + "}].[" + TableName + "]";
         }
 
         public string TableName { get; private set; }
 
         public string Table(bool includeAlias = true)
-            => includeAlias && !string.IsNullOrWhiteSpace(TableAlias) ? $"{_Table} {TableAlias}" : _Table!;
+            => includeAlias && !string.IsNullOrWhiteSpace(TableAlias) ? $"{_Table} {TableAlias}" : _Table;
 
-        private string? _Table = null;
+        private string _Table;
 
-        public string? TableAlias { get; }
+        public string TableAlias { get; }
 
         public string StarSelect
         {
@@ -155,7 +155,7 @@ namespace BWJ.Core.SqlRepository
             => $@"{joinType} JOIN {joinTable.Table()}
                     ON {Column(column)} {op.ToOperator()} {joinTable.Column(joinColumn)}";
 
-        public string SelectAllExcept(params Expression<Func<TEntity, object>>[] excludeColumns)
+        public string SelectAllExcept(params Expression<Func<TEntity, object?>>[] excludeColumns)
         {
             var columns = DatabaseColumns;
             var remove = new List<PropertyInfo>();
@@ -201,7 +201,7 @@ namespace BWJ.Core.SqlRepository
             => string.IsNullOrEmpty(searchTerm) == false ?
             $"%{EscapeForLikeQuery(searchTerm)}%" : string.Empty;
 
-        public static string? EscapeForLikeQuery(string searchTerm)
+        public static string? EscapeForLikeQuery(string? searchTerm)
             => searchTerm?
             .Replace("_", "[_]")
             .Replace("%", "[%]")
@@ -237,14 +237,16 @@ namespace BWJ.Core.SqlRepository
         // see https://stackoverflow.com/questions/671968/retrieving-property-name-from-lambda-expression
         private PropertyInfo GetPropertyFromLambda<TProperty>(Expression<Func<TEntity, TProperty>> propertyLambda)
         {
+            Type type = typeof(TEntity);
+
             MemberExpression? member = propertyLambda.Body as MemberExpression;
-            if (member is null)
+            if (member == null)
             {
                 throw new ArgumentException($"Expression '{propertyLambda}' refers to a method, not a property.");
             }
 
             PropertyInfo? property = member.Member as PropertyInfo;
-            if (property is null)
+            if (property == null)
             {
                 throw new ArgumentException($"Expression '{propertyLambda}' refers to a field, not a property.");
             }
