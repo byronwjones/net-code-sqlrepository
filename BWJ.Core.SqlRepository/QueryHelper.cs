@@ -113,6 +113,9 @@ namespace BWJ.Core.SqlRepository
         public string ColumnInParameter<TProperty>(Expression<Func<TEntity, TProperty>> columnAndParameterProperty) =>
             CompareColumnToParameter(SqlOperator.In, columnAndParameterProperty);
 
+        public string ColumnNotInParameter<TProperty>(Expression<Func<TEntity, TProperty>> columnAndParameterProperty) =>
+            CompareColumnToParameter(SqlOperator.NotIn, columnAndParameterProperty);
+
         public string ColumnLikeParameter<TProperty>(Expression<Func<TEntity, TProperty>> columnAndParameterProperty) =>
             CompareColumnToParameter(SqlOperator.Like, columnAndParameterProperty);
 

@@ -11,6 +11,7 @@ namespace BWJ.Core.SqlRepository
         GreaterThanOrEqual,
         NotEqual,
         In,
+        NotIn,
         Like,
     }
 
@@ -34,6 +35,8 @@ namespace BWJ.Core.SqlRepository
                     return "<>";
                 case SqlOperator.In:
                     return "IN";
+                case SqlOperator.NotIn:
+                    return "NOT IN";
                 case SqlOperator.Like:
                     return "LIKE";
                 default:
