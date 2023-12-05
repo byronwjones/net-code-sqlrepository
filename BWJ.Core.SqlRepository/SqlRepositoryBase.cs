@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace BWJ.Core.SqlRepository
 {
-    public abstract class SqlRepositoryBase<TEntity>
+    public abstract class SqlRepositoryBase<TEntity, TIdentifier>
         where TEntity : class
     {
         private readonly string _cs;
@@ -42,6 +42,18 @@ namespace BWJ.Core.SqlRepository
             string query,
             Func<TEntity, TChildEntity, TChildEntity2, TChildEntity3, TEntity> entityBuilder,
             IEnumerable<string> splitOn,
+            object? parameters = null)
+            => (await GetMany(query, entityBuilder, splitOn, parameters)).FirstOrDefault();
+        protected async Task<TEntity?> GetOne<TChildEntity, TChildEntity2, TChildEntity3, TChildEntity4>(
+            string query,
+            Func<TEntity, TChildEntity, TChildEntity2, TChildEntity3, TChildEntity4, TEntity> entityBuilder,
+            string splitOn,
+            object? parameters = null)
+            => (await GetMany(query, entityBuilder, splitOn, parameters)).FirstOrDefault();
+        protected async Task<TEntity?> GetOne<TChildEntity, TChildEntity2, TChildEntity3, TChildEntity4, TChildEntity5>(
+            string query,
+            Func<TEntity, TChildEntity, TChildEntity2, TChildEntity3, TChildEntity4, TChildEntity5, TEntity> entityBuilder,
+            string splitOn,
             object? parameters = null)
             => (await GetMany(query, entityBuilder, splitOn, parameters)).FirstOrDefault();
 
@@ -89,6 +101,30 @@ namespace BWJ.Core.SqlRepository
                 return await conn.QueryAsync(query, entityBuilder, parameters, splitOn: string.Join(',', splitOn));
             }
         }
+        protected async Task<IEnumerable<TEntity>> GetMany<TChildEntity, TChildEntity2, TChildEntity3, TChildEntity4>(
+            string query,
+            Func<TEntity, TChildEntity, TChildEntity2, TChildEntity3, TChildEntity4, TEntity> entityBuilder,
+            string splitOn,
+            object? parameters = null)
+        {
+            using (var conn = getSqlConnection())
+            {
+                conn.Open();
+                return await conn.QueryAsync(query, entityBuilder, parameters, splitOn: splitOn);
+            }
+        }
+        protected async Task<IEnumerable<TEntity>> GetMany<TChildEntity, TChildEntity2, TChildEntity3, TChildEntity4, TChildEntity5>(
+            string query,
+            Func<TEntity, TChildEntity, TChildEntity2, TChildEntity3, TChildEntity4, TChildEntity5, TEntity> entityBuilder,
+            string splitOn,
+            object? parameters = null)
+        {
+            using (var conn = getSqlConnection())
+            {
+                conn.Open();
+                return await conn.QueryAsync(query, entityBuilder, parameters, splitOn: splitOn);
+            }
+        }
 
         protected async Task<T?> GetScalar<T>(string query, object? parameters = null)
         {
@@ -97,6 +133,33 @@ namespace BWJ.Core.SqlRepository
                 conn.Open();
                 return await conn.ExecuteScalarAsync<T>(query, parameters);
             }
+        }
+
+        protected async Task<IEnumerable<T>> GetPrimitiveList<T>(string query, object? parameters = null)
+        {
+            var listType = typeof(T);
+            if (IsDatabasePrimitiveType(listType) == false)
+            {
+                throw new ArgumentException($"Type {listType.FullName} does not map to a database primitive type");
+            }
+
+            using (var conn = getSqlConnection())
+            {
+                conn.Open();
+                return await conn.QueryAsync<T>(query, parameters);
+            }
+        }
+
+        private bool IsDatabasePrimitiveType(Type? t)
+        {
+            if (t is null) { return false; }
+
+            return t.IsValueType
+                || t == typeof(string)
+                || t == typeof(DateTime)
+                || t == typeof(decimal)
+                || t == typeof(byte[])
+                || IsDatabasePrimitiveType(Nullable.GetUnderlyingType(t));
         }
 
         protected async Task Execute(string query, object? parameters = null)
@@ -108,7 +171,7 @@ namespace BWJ.Core.SqlRepository
             }
         }
 
-        protected async Task<long> CreateRecord(TEntity record, string schema)
+        protected async Task<TIdentifier> CreateRecord(TEntity record, string schema)
         {
             var x = new QueryHelper<TEntity>();
 
@@ -126,7 +189,7 @@ namespace BWJ.Core.SqlRepository
                     SELECT SCOPE_IDENTITY() AS [SCOPE_IDENTITY];";
             });
 
-            return await GetScalar<long>(query, record);
+            return (await GetScalar<TIdentifier>(query, record))!;
         }
 
         protected async Task UpdateRecord(TEntity record, string schema)
@@ -171,9 +234,9 @@ namespace BWJ.Core.SqlRepository
             await Execute(query, record);
         }
 
-        protected async Task<TEntity?> GetRecord(long id, string schema)
+        protected async Task RemoveRecordById(TIdentifier id, string schema)
         {
-            var query = GetQuery("GetRecord", schema, () =>
+            var query = GetQuery("RemoveRecordById", schema, () =>
             {
                 var x = new QueryHelper<TEntity>();
 
@@ -183,14 +246,14 @@ namespace BWJ.Core.SqlRepository
                 }
 
                 return $@"
-                    SELECT * FROM {x.Table()}
+                    DELETE FROM {x.Table()}
                           WHERE {x.PrimaryKey.ToColumnString()} = @Id";
             });
 
-            return await GetOne(query, new { Id = id });
+            await Execute(query, new { Id = id });
         }
 
-        protected async Task<TEntity?> GetRecord(string id, string schema)
+        protected async Task<TEntity?> GetRecord(TIdentifier id, string schema)
         {
             var query = GetQuery("GetRecord", schema, () =>
             {
@@ -198,7 +261,7 @@ namespace BWJ.Core.SqlRepository
 
                 if (x.PrimaryKey is null)
                 {
-                    throw new FormatException($"A property on entity class {typeof(TEntity).Name} must have a Key or ExplicitKey attribute");
+                    throw new FormatException($"A property on entity class {typeof(TEntity).Name} must have the name Id or a key attribute");
                 }
 
                 return $@"
@@ -222,5 +285,12 @@ namespace BWJ.Core.SqlRepository
 
         protected string GetQuery(string key, string schema, Func<string> queryBuilder) =>
             _queryService.GetQuery(typeof(TEntity), key, schema, queryBuilder);
+    }
+
+    public abstract class SqlRepositoryBase<TEntity> : SqlRepositoryBase<TEntity, long>
+        where TEntity : class
+    {
+        public SqlRepositoryBase(IConfiguration _config, ISqlQueryCacheService queryService)
+            : base(_config, queryService) { }
     }
 }
