@@ -5,12 +5,12 @@ namespace BWJ.Core.SqlRepository
 {
     public static class SqlRepositoryServiceCollectionExtensions
     {
-        public static IServiceCollection RegisterDatabaseRepositories<TFromAssembly>(this IServiceCollection services)
+        public static IServiceCollection RegisterDatabaseRepositories<TFromAssembly>(this IServiceCollection services, bool registerAsScoped = false)
         {
             services.AddSingleton<ISqlQueryCacheService, SqlQueryCacheService>();
 
             var types = typeof(TFromAssembly).Assembly.GetExportedTypes();
-            var repos = types.Where(t => t.IsSubclassOfGenericClassDefinition(typeof(SqlRepositoryBase<>)));
+            var repos = types.Where(t => t.IsSubclassOfGenericClassDefinition(typeof(SqlRepositoryBase<,>)));
 
             foreach (var repository in repos)
             {
@@ -18,7 +18,14 @@ namespace BWJ.Core.SqlRepository
 
                 if (iface is not null)
                 {
-                    services.AddSingleton(iface, repository);
+                    if(registerAsScoped)
+                    {
+                        services.AddScoped(iface, repository);
+                    }
+                    else
+                    {
+                        services.AddSingleton(iface, repository);
+                    }
                 }
             }
 
